@@ -1,0 +1,46 @@
+---
+- name: executing count_invalid_objects_after_inst.sql
+  become: yes
+  become_user: oracle
+  command: "/opt/oracle/product/11.2.0/bin/sqlplus {{ mgr_username }}/{{ mgr_password }} @count_invalid_objects_after_inst.sql"
+  environment:
+    ORACLE_HOME: "{{ oracle_home }}"
+    ORACLE_SID: "{{ SID }}"
+  args:
+    chdir: "/opt/application/mitro/DB_Release/{{ release_name }}/install"
+    removes: "/opt/application/mitro/DB_Release/{{ release_name }}/install/count_invalid_objects_after_inst.sql"
+  register: invalid_obj_after
+
+- name: checking count_invalid_objects_after_inst.log
+  become: yes
+  become_user: oracle
+  stat:
+    path: "/opt/application/mitro/DB_Release/{{ release_name }}/logs/count_invalid_objects_after_inst.log"
+  register: invalid_obj_after2
+
+- name: checking errors in count_invalid_objects_after_inst.log
+  command: grep ORA- count_invalid_objects_after_inst.log
+  args:
+    chdir: "/opt/application/mitro/DB_Release/{{ release_name }}/logs"
+    removes: "/opt/application/mitro/DB_Release/{{ release_name }}/logs/count_invalid_objects_after_inst.log"
+  ignore_errors: yes
+  register: err_after_obj
+  when: invalid_obj_after2.stat.exists == True
+
+- name: showing errors of count_invalid_objects_after_inst.log
+  debug:
+    msg: "{{ err_after_obj.stdout_lines }}"
+  when: (err_after_obj is not failed) and (invalid_obj_after2.stat.exists == True)
+  register: err_is_after_obj
+
+- name: error is present in count_invalid_objects_after_inst.sql--> Exiting...
+  command: /bin/false
+  args:
+    removes: "/opt/application/mitro/DB_Release/{{ release_name }}/logs/count_invalid_objects_after_inst.log"
+  when: (err_is_after_obj is not skipped) and (invalid_obj_after2.stat.exists == True)
+
+- name: number of invalid obejects after installation
+  debug:
+    msg: "{{ invalid_obj_after.stdout_lines }}"
+  when: invalid_obj_after2.stat.exists == True
+

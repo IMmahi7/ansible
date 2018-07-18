@@ -1,0 +1,7 @@
+---
+- name: Installing java 1.7
+  become: yes
+  become_user: root
+  yum:
+    name: java-1.7.0-openjdk*
+    state: present

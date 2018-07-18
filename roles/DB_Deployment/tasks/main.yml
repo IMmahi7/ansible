@@ -1,0 +1,108 @@
+---
+- name: creating directory for {{ release_name }}
+  become: yes
+  become_user: oracle
+  file:
+    path: "/opt/application/mitro/DB_Release/{{ release_name }}"
+    state: directory
+
+- name: getting package of release {{ release_name }}
+  become: yes
+  become_user: oracle
+  get_url:
+    url: "{{ mrodb_sources }}"
+    dest: "/opt/application/mitro/DB_Release/{{ release_name }}"
+    url_username: "{{ sources_user }}"
+    url_password: "{{ sources_password }}"
+    validate_certs: "no"
+    tmp_dest: "/opt/application/mitro/DB_Release/{{ release_name }}"
+
+- name: unzipping package of release {{ release_name }}
+  become: yes
+  become_user: oracle
+  unarchive:
+    src: "/opt/application/mitro/DB_Release/{{ release_name }}/{{ release_name }}.zip"
+    dest: "/opt/application/mitro/DB_Release/{{ release_name }}"
+    remote_src: yes
+
+- name: change permission of DB pkg
+  become: yes
+  become_user: oracle
+  file:
+    path: "/opt/application/mitro/DB_Release/{{ release_name }}"
+    mode: 0775
+    recurse: yes
+
+- name: Checking DB connection for ansible user
+  become: yes
+  become_user: oracle
+  shell: exit | /opt/oracle/product/11.2.0/bin/sqlplus  {{ ora_username }}/{{ ora_password }} | grep Connected
+  environment:
+    ORACLE_HOME: "{{ oracle_home }}"
+    ORACLE_SID: "{{ SID }}"
+  args:
+    removes: "/opt/oracle/product/11.2.0/bin/sqlplus"
+
+- name: Checking DB connection for mitromgr user
+  become: yes
+  become_user: oracle
+  shell: exit | /opt/oracle/product/11.2.0/bin/sqlplus  {{ mgr_username }}/{{ mgr_password }} | grep Connected
+  environment:
+    ORACLE_HOME: "{{ oracle_home }}"
+    ORACLE_SID: "{{ SID }}"
+  args:
+    removes: "/opt/oracle/product/11.2.0/bin/sqlplus"
+
+- name: checking presence of count_invalid_objects_before_inst.sql
+  stat:
+    path: "/opt/application/mitro/DB_Release/{{ release_name }}/install/count_invalid_objects_before_inst.sql"
+  register: invalid_before_sql
+
+- name: including count_invalid_objects_before_inst.yml
+  include: count_invalid_objects_before_inst.yml
+  when: invalid_before_sql.stat.exists == True
+
+- name: checking presence of prerequisite_check.sql
+  stat:
+    path: "/opt/application/mitro/DB_Release/{{ release_name }}/install/prerequisite_check.sql"
+  register: prerequisite_sql
+
+- name: including prerequisite_check.yml
+  include: prerequisite_check.yml
+  when: prerequisite_sql.stat.exists == True
+
+- name: checking presence of oracle_install.sql
+  stat:
+    path: "/opt/application/mitro/DB_Release/{{ release_name }}/install/oracle_install.sql"
+  register: oracle_sql
+
+- name: including oracle_install.yml
+  include: oracle_install.yml
+  when: oracle_sql.stat.exists == True
+
+- name: checking presence of count_invalid_objects_after_inst.sql
+  stat:
+    path: "/opt/application/mitro/DB_Release/{{ release_name }}/install/count_invalid_objects_after_inst.sql"
+  register: invalid_after_sql
+
+- name: including count_invalid_objects_after_inst.yml
+  include: count_invalid_objects_after_inst.yml
+  when: invalid_after_sql.stat.exists == True
+
+- name: checking presence of mitromgr_install.sql
+  stat:
+    path: "/opt/application/mitro/DB_Release/{{ release_name }}/install/mitromgr_install.sql"
+  register: mitromgr_sql
+
+- name: including mitromgr_install.yml
+  include: mitromgr_install.yml
+  when: mitromgr_sql.stat.exists == True
+
+- name: checking presence of mark_release_installed.sql
+  stat:
+    path: "/opt/application/mitro/DB_Release/{{ release_name }}/install/mark_release_installed.sql"
+  register: marker_sql
+
+- name: including mark_release_installed.yml
+  include: mark_release_installed.yml
+  when: marker_sql.stat.exists == True

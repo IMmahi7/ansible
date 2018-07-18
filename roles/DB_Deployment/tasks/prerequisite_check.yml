@@ -1,0 +1,61 @@
+---
+- name: executing prerequisite_check.sql
+  become: yes
+  become_user: oracle
+  command: "/opt/oracle/product/11.2.0/bin/sqlplus {{ mgr_username }}/{{ mgr_password }} @prerequisite_check.sql"
+  environment:
+    ORACLE_HOME: "{{ oracle_home }}"
+    ORACLE_SID: "{{ SID }}"
+  args:
+    chdir: "/opt/application/mitro/DB_Release/{{ release_name }}/install"
+    removes: "/opt/application/mitro/DB_Release/{{ release_name }}/install/prerequisite_check.sql"
+  register: prerequisite1
+
+- name: checking Pre_Requisite_Check.log
+  become: yes
+  become_user: oracle
+  stat:
+    path: "/opt/application/mitro/DB_Release/{{ release_name }}/logs/Pre_Requisite_Check.log"
+  register: prerequisite2
+
+- name: checking errors in Pre_Requisite_Check.log
+  command: grep ORA- Pre_Requisite_Check.log
+  args:
+    chdir: "/opt/application/mitro/DB_Release/{{ release_name }}/logs"
+    removes: "/opt/application/mitro/DB_Release/{{ release_name }}/logs/Pre_Requisite_Check.log"
+  ignore_errors: yes
+  register: err_at_pre
+  when: prerequisite2.stat.exists == True
+
+- name: showing errors of Pre_Requisite_Check.log
+  debug:
+    msg: "{{ err_at_pre.stdout_lines }}"
+  when: (err_at_pre is not failed) and (prerequisite2.stat.exists == True)
+  register: err_is_pre
+
+- name: error is present in Pre_Requisite_Check.log--> Exiting...
+  command: /bin/false
+  args:
+    removes: "/opt/application/mitro/DB_Release/{{ release_name }}/logs/Pre_Requisite_Check.log"
+  when: (err_is_pre is not skipped) and (prerequisite2.stat.exists == True)
+
+- name: checking prerequisite release of {{ release_name }}
+  command: 'grep "RELEASE NOT PRESENT IN THE DATABASE" Pre_Requisite_Check.log'
+  args:
+    chdir: "/opt/application/mitro/DB_Release/{{ release_name }}/logs"
+    removes: "/opt/application/mitro/DB_Release/{{ release_name }}/logs/Pre_Requisite_Check.log"
+  ignore_errors: yes
+  register: check_pre
+
+- name: Prerequisite release of {{ release_name }}
+  debug:
+    msg: "{{ check_pre.stdout_lines }}"
+  when: (check_pre is not failed) and (prerequisite2.stat.exists == True)
+  register: pre_is_not
+
+- name: Prerequisite of {{ release_name }} is not present--> Exiting...
+  command: /bin/false
+  args:
+    removes: "/opt/application/mitro/DB_Release/{{ release_name }}/logs/Pre_Requisite_Check.log"
+  when: (pre_is_not is not skipped) and (prerequisite2.stat.exists == True)
+

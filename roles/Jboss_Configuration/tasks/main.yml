@@ -1,0 +1,158 @@
+---
+- name: add applicative instance
+  become: yes
+  become_user: root
+  command: "{{ item }}"
+  args:
+    removes: /etc/jboss-env
+  with_items:
+    - "/etc/jboss-env"
+    - "{{ jboss_tools }}/jboss-create-instance.sh -i JBOSS -o {{ jboss_ins_arg }} -u mitro"
+    - "{{ jboss_tools }}/jboss-switch-activation.sh -i JBOSS -o {{ jboss_ins_arg }} -a Y"
+  ignore_errors: yes
+
+- name: getting mitro_war
+  become: yes
+  become_user: jboss
+  get_url:
+    url: "https://amp-prod-repo-artifacts.equant.com/repository/apps-raw/applications/mro/mitro_global_war.tar.gz"
+    dest: "{{ release_home }}"
+    url_username: "{{ sources_user }}"
+    url_password: "{{ sources_password }}"
+    validate_certs: "no"
+    tmp_dest: "{{ release_home }}"
+
+- name: unarchiving mitro_war
+  become: yes
+  become_user: jboss
+  unarchive:
+    src: "{{ release_home }}/mitro_global_war.tar.gz"
+    dest: "{{ release_home }}"
+    remote_src: yes
+
+- name: change permission for mitro_war
+  become: yes
+  become_user: root
+  file:
+    path: "{{ release_home }}/mitro_global_war"
+    mode: 0755
+    recurse: yes
+
+- name: creating directory for jboss home
+  become: yes
+  become_user: jboss
+  file:
+    path: "/opt/jboss/7.2.0/release"
+    state: directory
+
+- name: creating directory for mitro logs
+  become: yes
+  become_user: jboss
+  file:
+    path: "/opt/jboss/7.2.0/mitro/logs"
+    state: directory
+
+- name: changing permission for mitro
+  become: yes
+  become_user: jboss
+  file:
+    path: /opt/jboss/7.2.0/mitro
+    mode: 0755
+    recurse: yes
+
+- name: copying add-user script
+  become: yes
+  become_user: jboss
+  copy:
+    src: "{{ release_home }}/mitro_global_war/add-user.sh"
+    dest: /opt/jboss/7.2.0/bin
+    remote_src: yes
+
+- name: copying mgmt-users.properties
+  become: yes
+  become_user: jboss
+  copy:
+    src: "{{ release_home }}/mitro_global_war/properties/mgmt-users.properties"
+    dest: /opt/jboss/7.2.0/standalone/configuration
+    remote_src: yes
+
+- name: copying jboss properties files
+  become: yes
+  become_user: jboss
+  template: src={{ item.src }} dest={{ item.dest }}
+  with_items:
+    - { src: "clientresource.properties", dest: "{{ jboss_configuration }}/clientresource.properties" }
+    - { src: "emitroresource.properties", dest: "{{ jboss_configuration }}/emitroresource.properties" }
+    - { src: "config.properties", dest: "{{ jboss_configuration }}/config.properties" }
+
+- name: copying tar of jboss_orig and mitro_scripts
+  become: yes
+  become_user: root
+  copy: src={{ item.src }} dest={{ item.dest }} remote_src=yes
+  with_items:
+    - { src: "{{ release_home }}/mitro_global_war/jboss_orig.tar.gz", dest: '/opt/application/JBOSS/current' }
+    - { src: "{{ release_home }}/mitro_global_war/mitro_scripts.tar.gz", dest: '/opt/application/mitro' }
+
+- name: unarchive tar of jboss_orig and mitro_scripts
+  become: yes
+  become_user: root
+  unarchive: src={{ item.src }} dest={{ item.dest }} remote_src=yes
+  with_items:
+    - { src: "{{ release_home }}/mitro_global_war/jboss_orig.tar.gz", dest: '/opt/application/JBOSS/current' }
+    - { src: "{{ release_home }}/mitro_global_war/mitro_scripts.tar.gz", dest: '/opt/application/mitro' }
+
+- name: clearing cache
+  become: yes
+  become_user: root
+  file:
+    path: "{{ item }}"
+    state: absent
+  with_items:
+    - "{{ jboss_tmp }}/work"
+    - "{{ jboss_tmp }}/vfs"
+    - "{{ jboss_deployments }}/emailrepository.war.deployed"
+    - "{{ jboss_deployments }}/emitro.war.deployed"
+    - "{{ jboss_deployments }}/mitrosimulator.war.deployed"
+    - "{{ jboss_deployments }}/mitrowebservices.war.deployed"
+    - "{{ jboss_deployments }}/SSOmitro.war.deployed"
+    - "{{ jboss_deployments }}/UserManagement.war.deployed"
+
+- name: copying standalone.xml file
+  become: yes
+  become_user: mitro
+  template:
+    src: "standalone.xml"
+    dest: "/opt/application/JBOSS/current/jboss/standalone/configuration/standalone.xml"
+
+- name: Copying Properties files
+  become: yes
+  become_user: mitro
+  copy:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    remote_src: yes
+    owner: mitro
+    group: mitro
+    mode: 0775
+  with_items:
+    - { src: '{{ mitro_war_home }}/emailrepository.war', dest: '{{ jboss_deployments }}' }
+    - { src: '{{ mitro_war_home }}/emitro.war', dest: '{{ jboss_deployments }}' }
+    - { src: '{{ mitro_war_home }}/mitrosimulator.war', dest: '{{ jboss_deployments }}' }
+    - { src: '{{ mitro_war_home }}/mitrowebservices.war', dest: '{{ jboss_deployments }}' }
+    - { src: '{{ mitro_war_home }}/SSOmitro.war', dest: '{{ jboss_deployments }}' }
+    - { src: '{{ mitro_war_home }}/UserManagement.war', dest: '{{ jboss_deployments }}' }
+
+- name: copying Dbproperties file
+  become: yes
+  become_user: root
+  template:
+    src: "connection.properties"
+    dest: "/opt/application/mitro/DbProperties/connection.properties"
+
+- name: restarting jboss services
+  become: yes
+  become_user: root
+  command: "{{ items }}"
+  with_items:
+    - service jboss stop all
+    - service jboss start all

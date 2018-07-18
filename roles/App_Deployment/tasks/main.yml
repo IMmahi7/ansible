@@ -1,0 +1,70 @@
+---
+- name: creating {{ release_name }} folder
+  become: yes
+  become_user: jboss
+  file:
+    path: "/opt/application/mitro/release/{{ release_name }}"
+    state: directory
+
+- name: getting package of release {{ release_name }}
+  become: yes
+  become_user: jboss
+  get_url:
+    url: "{{ mroapp_sources }}"
+    dest: "/opt/application/mitro/release/{{ release_name }}"
+    url_username: "{{ sources_user }}"
+    url_password: "{{ sources_password }}"
+    validate_certs: "no"
+    tmp_dest: "/opt/application/mitro/release/{{ release_name }}"
+
+- name: unzipping package of release {{ release_name }}
+  become: yes
+  become_user: jboss
+  unarchive:
+    src: "/opt/application/mitro/release/{{ release_name }}/{{ release_name }}.zip"
+    dest: "/opt/application/mitro/release/{{ release_name }}"
+    remote_src: yes
+
+- name: change permission for {{ release_name }} release
+  become: yes
+  become_user: jboss
+  file:
+    path: "/opt/application/mitro/release/{{ release_name }}"
+    mode: 0775
+    recurse: yes
+
+- name: checking CarrierNotification presence in release package
+  stat:
+    path: "/opt/application/mitro/release/{{ release_name }}/{{ release_name }}_app/CarrierNotification"
+  register: carrier_presence
+
+- name: include CarrierNotification.yml
+  include: CarrierNotification.yml
+  when: carrier_presence.stat.exists == True
+
+- name: checking restapi presence in release package
+  stat:
+    path: "/opt/application/mitro/release/{{ release_name }}/{{ release_name }}_app/orange-mitro-restapi.jar"
+  register: restapi_presence
+
+- name: include Restapi.yml
+  include: Restapi.yml
+  when: restapi_presence.stat.exists == True
+
+- name: checking cmtmitro.sh presence in release package
+  stat:
+    path: "/opt/application/mitro/release/{{ release_name }}/{{ release_name }}_app/cmtmitro.sh"
+  register: cmt_presence
+
+- name: include CMTmitro.yml
+  include: CMTmitro.yml
+  when: cmt_presence.stat.exists == True
+
+- name: checking emitro.war presence in release package
+  stat:
+    path: "/opt/application/mitro/release/{{ release_name }}/{{ release_name }}_app/emitro.war"
+  register: emitro_presence
+
+- name: include EmitroWar.yml
+  include: EmitroWar.yml
+  when: emitro_presence.stat.exists == True

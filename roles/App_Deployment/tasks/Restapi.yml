@@ -1,0 +1,87 @@
+---
+- name: getting services of spring boot
+  become: yes
+  become_user: mitro
+  shell: "ps -ef | grep orange-mitro-restapi | awk '{print $2}'"
+  args:
+    removes: /opt/application/spring-boot-tomcat-server
+  register: running_processes
+
+- name: Killing processes of spring boot
+  become: yes
+  become_user: mitro
+  command: "kill {{ item }}"
+  with_items: "{{ running_processes.stdout_lines }}"
+  ignore_errors: yes
+  when: running_processes is defined
+
+- name: taking backup of previous jar file
+  become: yes
+  become_user: mitro
+  copy:
+    src: /opt/application/spring-boot-tomcat-server/orange-mitro-restapi.jar
+    dest: "/opt/application/mitro/backup/orange-mitro-restapi.jar_{{ release_name }}"
+    remote_src: yes
+
+- name: removing previous jar file
+  become: yes
+  become_user: mitro
+  file:
+    path: /opt/application/spring-boot-tomcat-server/orange-mitro-restapi.jar
+    state: absent
+
+- name: deploying new jar file
+  become: yes
+  become_user: mitro
+  copy:
+    src: "/opt/application/mitro/release/{{ release_name }}/{{ release_name }}_app/orange-mitro-restapi.jar"
+    dest: /opt/application/spring-boot-tomcat-server/
+    remote_src: yes
+
+- name: changing permission of jar
+  file:
+    path: /opt/application/spring-boot-tomcat-server/orange-mitro-restapi.jar
+    owner: mitro
+    group: mitro
+    mode: 0775 
+
+- name: starting spring boot on QA
+  become: yes
+  become_user: mitro
+  shell: java -jar -Dspring.profiles.active=qa orange-mitro-restapi.jar > nohup.out & echo $! > ./pid.file &
+  async: 31536000
+  poll: 0
+  args:
+    chdir: /opt/application/spring-boot-tomcat-server
+    removes: /opt/application/spring-boot-tomcat-server/orange-mitro-restapi.jar
+  when: env == 'qa'
+
+- name: starting spring boot on UAT
+  become: yes
+  become_user: mitro
+  shell: java -jar -Dspring.profiles.active=uat orange-mitro-restapi.jar > nohup.out & echo $! > ./pid.file &
+  async: 31536000
+  poll: 0
+  args:
+    chdir: /opt/application/spring-boot-tomcat-server
+    removes: /opt/application/spring-boot-tomcat-server/orange-mitro-restapi.jar
+  when: env == 'am'
+
+- name: starting spring boot on TEST
+  become: yes
+  become_user: mitro
+  shell: java -jar -Dspring.profiles.active=dev orange-mitro-restapi.jar > nohup.out & echo $! > ./pid.file &
+  async: 31536000
+  poll: 0
+  args:
+    chdir: /opt/application/spring-boot-tomcat-server
+    removes: /opt/application/spring-boot-tomcat-server/orange-mitro-restapi.jar
+  when: env == 'test'
+
+- name: Waiting to start spring boot...
+  become: yes
+  become_user: mitro
+  wait_for:
+    path: /opt/application/spring-boot-tomcat-server/nohup.out
+    search_regex: "Started OrangeMitroRestApplication"
+

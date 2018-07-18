@@ -1,0 +1,43 @@
+---
+- name: creating jboss directory structure
+  become: yes
+  become_user: root
+  file:
+    path: /images/jboss/7.2.0
+    state: directory
+
+- name: getting package of jboss
+  become: yes
+  become_user: root
+  get_url:
+    url: "https://amp-prod-repo-artifacts.equant.com/repository/apps-raw/applications/mro/{{ jboss_pkg_name }}"
+    dest: "/images/jboss/7.2.0"
+    url_username: "{{ sources_user }}"
+    url_password: "{{ sources_password }}"
+    validate_certs: "no"
+    tmp_dest: /images/jboss/7.2.0
+
+
+- name: unarchive package of jboss
+  become: yes
+  become_user: root
+  unarchive:
+    src: "/images/jboss/7.2.0/{{ jboss_pkg_name }}"
+    dest: /images/jboss/7.2.0
+    remote_src: yes
+
+- name: executing jboss installation script
+  become: yes
+  become_user: root
+  command: ./jboss-install.sh -s removes=/images/jboss/7.2.0/jboss-install.sh
+  args:
+    chdir: /images/jboss/7.2.0
+
+- name: checking link of openjdk
+  become: yes
+  become_user: root
+  file:
+    src: "/opt/openJDK/1.7.0.25-2.3.10.5/usrlib/jvm/java-1.7.0-openjdk-1.7.0.25.x86_64/jre/bin/java"
+    dest: "/usr/bin/java"
+    state: link
+    force: true

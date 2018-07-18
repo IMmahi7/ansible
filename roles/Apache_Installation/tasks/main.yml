@@ -1,0 +1,38 @@
+---
+- name: creating apache home directory
+  become: yes
+  become_user: root
+  file:
+    path: /images/apache
+    state: directory
+
+- name: getting apache package
+  become: yes
+  become_user: root
+  get_url:
+    url: "https://amp-prod-repo-artifacts.equant.com/repository/apps-raw/applications/mro/{{ apache_pkg_name }}"
+    dest: "/images/apache"
+    url_username: "{{ sources_user }}"
+    url_password: "{{ sources_password }}"
+    validate_certs: "no"
+    tmp_dest: /images/apache
+
+- name: unarchiving apache package
+  become: yes
+  become_user: root
+  unarchive:
+    src: "/images/apache/{{ apache_pkg_name }}"
+    dest: /images/apache
+    remote_src: yes
+
+- name: executing apache installation script
+  become: yes
+  become_user: root
+  command: ./apa_install.ksh removes=/images/apache/apa_install.ksh
+  args:
+    chdir: /images/apache
+
+- name: restarting apache services
+  become: yes
+  become_user: root
+  service: name=httpd state=restarted

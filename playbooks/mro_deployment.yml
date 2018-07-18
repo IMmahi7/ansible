@@ -1,0 +1,85 @@
+---
+- hosts: mrodb:&{{ env }}:&{{ half_platform }}
+  tasks:
+  - name: including vars files
+    include_vars: "{{ item }}"
+    with_items:
+      - "../vars/mro_all_public.yml"
+      - "../vars/devops-access.yml"
+      - "../vars/mro_{{ env }}_confidential.yml"
+      - "../vars/mro_{{ env }}_public.yml"
+    when: (mrodb_sources is defined) and (half_platform != 'half_platform2')
+
+  - name: Database part deployment
+    include_role:
+      name: DB_Deployment
+    vars:
+      release_name: "{{ mrodb_sources | basename | splitext | first }}"
+    when: (mrodb_sources is defined) and (half_platform != 'half_platform2')
+
+- hosts: mroapp:&{{ env }}:&{{ half_platform }}
+  tasks:
+  - name: including vars files
+    include_vars: "{{ item }}"
+    with_items:
+      - "../vars/mro_all_public.yml"
+      - "../vars/devops-access.yml"
+      - "../vars/mro_{{ env }}_confidential.yml"
+      - "../vars/mro_{{ env }}_public.yml"
+    when: mroapp_sources is defined
+
+  - name: Checking Apache status
+    become: yes
+    service: name=httpd state=started
+    ignore_errors: yes
+    register: http_status
+    when: mroapp_sources is defined
+
+  - name: Installing Apache
+    include_role:
+      name: Apache_Installation
+    when: (http_status is failed) and and (mroapp_sources is defined)
+
+  - name: Checking jboss status
+    become: yes
+    command: service jboss status all warn=false removes=/images/jboss
+    ignore_errors: yes
+    register: jboss_status
+    when: mroapp_sources is defined
+
+  - name: Installing Jboss
+    include_role:
+      name: Jboss_Installation
+    when: (jboss_status is failed) and (mroapp_sources is defined)
+    register: jboss1
+
+  - name: Checking java version
+    shell: java -version 2>&1 | grep version | awk '{print $3}' | sed 's/"//g' removes=/opt/openJDK
+    ignore_errors: yes
+    register: java_version
+    when: mroapp_sources is defined
+
+  - name: confirming java version
+    assert:
+      that:
+        - java_version.stdout is version_compare('1.7', '>=')
+    ignore_errors: yes
+    register: check_java
+    when: mroapp_sources is defined
+
+  - name: Installing Java version 1.7
+    include_role:
+      name: Java_Installation
+    when: (check_java is failed) and (mroapp_sources is defined)
+
+  - name: Jboss Configuration
+    include_role:
+      name: Jboss_Configuration
+    when: (jboss1 is not skipped) and (env is defined) and (mroapp_sources is defined)
+
+  - name: Application part deployment
+    include_role:
+      name: App_Deployment
+    vars:
+      release_name: "{{ mroapp_sources | basename | splitext | first }}"
+    when: mroapp_sources is defined

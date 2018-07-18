@@ -1,0 +1,40 @@
+---
+- name: executing oracle_install.sql
+  become: yes
+  become_user: oracle
+  command: "/opt/oracle/product/11.2.0/bin/sqlplus {{ ora_username }}/{{ ora_password }} @oracle_install.sql"
+  environment:
+    ORACLE_HOME: "{{ oracle_home }}"
+    ORACLE_SID: "{{ SID }}"
+  args:
+    chdir: "/opt/application/mitro/DB_Release/{{ release_name }}/install"
+    removes: "/opt/application/mitro/DB_Release/{{ release_name }}/install/oracle_install.sql"
+
+- name: checking oracle_install.log
+  become: yes
+  become_user: oracle
+  stat:
+    path: "/opt/application/mitro/DB_Release/{{ release_name }}/logs/oracle_install.log"
+  register: ora_install
+
+- name: checking errors in oracle_install.log
+  command: grep ORA- oracle_install.log
+  args:
+    chdir: "/opt/application/mitro/DB_Release/{{ release_name }}/logs"
+    removes: "/opt/application/mitro/DB_Release/{{ release_name }}/logs/oracle_install.log"
+  ignore_errors: yes
+  register: err_at_ora
+  when: ora_install.stat.exists == True
+
+- name: showing errors of oracle_install.log
+  debug:
+    msg: "{{ err_at_ora.stdout_lines }}"
+  when: (err_at_ora is not failed) and (ora_install.stat.exists == True)
+  register: err_is_ora
+
+- name: errors is present in oracle_install.log--> Exiting...
+  command: /bin/false
+  args:
+    removes: "/opt/application/mitro/DB_Release/{{ release_name }}/logs/oracle_install.log"
+  when: (err_is_ora is not skipped) and (ora_install.stat.exists == True)
+

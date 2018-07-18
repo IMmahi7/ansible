@@ -1,0 +1,39 @@
+---
+- name: taking backup of previous CarrierNotification
+  become: yes
+  become_user: mitro
+  command: cp -r /opt/application/mitro/carrier/CarrierNotification /opt/application/mitro/backup/CarrierNotification_{{ release_name }}
+  args:
+    removes: "/opt/application/mitro/carrier/CarrierNotification"
+
+- name: removing previous CarrierNotification
+  become: yes
+  become_user: mitro
+  file:
+    path: /opt/application/mitro/carrier/CarrierNotification
+    state: absent
+
+- name: deploying new CarrierNotification
+  become: yes
+  become_user: mitro
+  command: cp -r /opt/application/mitro/release/{{ release_name }}/{{ release_name }}_app/CarrierNotification /opt/application/mitro/carrier
+  args:
+    removes: "/opt/application/mitro/release/{{ release_name }}/{{ release_name }}_app/CarrierNotification"
+
+- name: changing permission of new CarrierNotification
+  become: yes
+  become_user: mitro
+  file:
+    path: /opt/application/mitro/carrier/CarrierNotification
+    owner: mitro
+    group: mitro
+    mode: 0775
+    recurse: yes
+
+- name: changing permission for carrier logs
+  become: yes
+  become_user: mitro
+  file:
+    path: /opt/application/mitro/carrier/CarrierNotification/logs
+    mode: 0777
+    recurse: yes
